@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reactive Face v2</title>
+<title>Reactive Face v3</title>
 
 <style>
 body {
@@ -30,20 +30,22 @@ body {
   background: #111;
   border-radius: 35px;
   top: 120px;
+  overflow: hidden;
   transition: all 0.3s ease;
 }
 
 .left-eye { left: 40px; }
 .right-eye { right: 40px; }
 
+/* PUPILS (70% size, always proportional) */
 .pupil {
   position: absolute;
-  width: 50px;
-  height: 60px;
+  width: 100%;
+  height: 100%;
   background: #3c4cff;
-  border-radius: 25px;
-  bottom: 5px;
-  left: 10px;
+  border-radius: 50%;
+  transform: scale(0.7);
+  transform-origin: center;
 }
 
 /* EYEBROWS */
@@ -77,11 +79,9 @@ body {
 .slow .eye {
   height: 20px;
 }
-
 .slow .brow {
   top: 90px;
 }
-
 .slow .mouth {
   height: 10px;
 }
@@ -90,11 +90,9 @@ body {
 .fast .eye {
   height: 120px;
 }
-
 .fast .brow {
   top: 40px;
 }
-
 .fast .mouth {
   height: 40px;
 }
@@ -103,11 +101,9 @@ body {
 .faster .eye {
   height: 5px;
 }
-
 .faster .brow {
   top: 95px;
 }
-
 .faster .mouth {
   height: 70px;
 }
@@ -128,44 +124,63 @@ body {
 </div>
 
 <script>
-// AUDIO SETUP
+// AUDIO SETUP (8-bit style beeps)
 let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let oscillator = audioCtx.createOscillator();
+let osc = audioCtx.createOscillator();
 let gain = audioCtx.createGain();
 
-oscillator.type = "sine";
-oscillator.connect(gain);
+osc.type = "square"; // 8-bit sound
+osc.connect(gain);
 gain.connect(audioCtx.destination);
-oscillator.start();
 
-// smoothing
-let smoothedSpeed = 0;
+gain.gain.value = 0;
+osc.start();
 
-function updateAudio(level) {
-  if (level === "slow") {
-    oscillator.frequency.value = 180;
-    gain.gain.value = 0.02;
+// BEEP LOOP
+let beepInterval;
+
+function startBeeping(speedLevel) {
+  clearInterval(beepInterval);
+
+  let intervalTime;
+  let freq;
+
+  if (speedLevel === "slow") {
+    intervalTime = 600;
+    freq = 220;
+  } else if (speedLevel === "fast") {
+    intervalTime = 300;
+    freq = 440;
+  } else {
+    intervalTime = 120;
+    freq = 880;
   }
-  if (level === "fast") {
-    oscillator.frequency.value = 400;
-    gain.gain.value = 0.05;
-  }
-  if (level === "faster") {
-    oscillator.frequency.value = 800;
-    gain.gain.value = 0.1;
-  }
+
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+  beepInterval = setInterval(() => {
+    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+  }, intervalTime);
 }
 
 // FACE CONTROL
 const face = document.getElementById("face");
+let currentState = "slow";
 
 function setState(state) {
+  if (state === currentState) return;
+
+  currentState = state;
   face.classList.remove("slow", "fast", "faster");
   face.classList.add(state);
-  updateAudio(state);
+
+  startBeeping(state);
 }
 
 // MOTION
+let smoothedSpeed = 0;
+
 function startMotion() {
   window.addEventListener("devicemotion", (event) => {
     let acc = event.accelerationIncludingGravity;
@@ -176,10 +191,9 @@ function startMotion() {
       acc.z * acc.z
     );
 
-    // smooth values to reduce jitter
+    // smoothing
     smoothedSpeed = smoothedSpeed * 0.8 + speed * 0.2;
 
-    // thresholds (tweakable)
     if (smoothedSpeed < 8) {
       setState("slow");
     } else if (smoothedSpeed < 18) {
@@ -197,9 +211,11 @@ if (typeof DeviceMotionEvent.requestPermission === "function") {
       if (res === "granted") startMotion();
     });
     audioCtx.resume();
+    startBeeping("slow");
   });
 } else {
   startMotion();
+  startBeeping("slow");
 }
 
 </script>
