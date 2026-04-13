@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reactive Face</title>
+
+<style>
+body {
+  margin: 0;
+  background: #b9c8d6;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+/* FACE CONTAINER */
+.face {
+  position: relative;
+  width: 300px;
+  height: 300px;
+}
+
+/* EYES */
+.eye {
+  position: absolute;
+  width: 70px;
+  height: 90px;
+  background: #111;
+  border-radius: 35px;
+  top: 120px;
+}
+
+.left-eye { left: 40px; }
+.right-eye { right: 40px; }
+
+.pupil {
+  position: absolute;
+  width: 50px;
+  height: 60px;
+  background: #3c4cff;
+  border-radius: 25px;
+  bottom: 5px;
+  left: 10px;
+}
+
+/* EYEBROWS */
+.brow {
+  position: absolute;
+  width: 80px;
+  height: 12px;
+  background: #111;
+  top: 70px;
+}
+
+.left-brow { left: 30px; transform: rotate(-10deg); }
+.right-brow { right: 30px; transform: rotate(10deg); }
+
+/* NOSE */
+.nose {
+  position: absolute;
+  width: 40px;
+  height: 20px;
+  background: #111;
+  bottom: 60px;
+  left: 130px;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+}
+
+/* ANIMATION STATES */
+.wide .eye {
+  height: 120px;
+}
+
+.closed .eye {
+  height: 10px;
+}
+
+.up .brow {
+  top: 40px;
+}
+
+.down .brow {
+  top: 90px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="face" id="face">
+  <div class="brow left-brow"></div>
+  <div class="brow right-brow"></div>
+
+  <div class="eye left-eye"><div class="pupil"></div></div>
+  <div class="eye right-eye"><div class="pupil"></div></div>
+
+  <div class="nose"></div>
+</div>
+
+<script>
+// AUDIO SETUP
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let oscillator = audioCtx.createOscillator();
+let gain = audioCtx.createGain();
+
+oscillator.type = "sine";
+oscillator.connect(gain);
+gain.connect(audioCtx.destination);
+gain.gain.value = 0.05;
+oscillator.start();
+
+function setPitch(speed) {
+  let freq = 200 + speed * 20; // pitch increases with movement
+  oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+}
+
+// FACE CONTROL
+const face = document.getElementById("face");
+
+function updateFace(speed) {
+  face.classList.remove("wide", "closed", "up", "down");
+
+  if (speed < 5) {
+    // Relaxed
+    setPitch(1);
+  } else if (speed < 20) {
+    // Medium
+    face.classList.add("wide", "up");
+    setPitch(5);
+  } else {
+    // Fast
+    face.classList.add("closed", "down");
+    setPitch(10);
+  }
+}
+
+// MOTION DETECTION
+if (typeof DeviceMotionEvent !== "undefined") {
+
+  // iOS permission request
+  if (typeof DeviceMotionEvent.requestPermission === "function") {
+    document.body.addEventListener("click", function () {
+      DeviceMotionEvent.requestPermission().then(response => {
+        if (response === "granted") {
+          startMotion();
+        }
+      });
+    });
+  } else {
+    startMotion();
+  }
+
+  function startMotion() {
+    window.addEventListener("devicemotion", function (event) {
+      let acc = event.accelerationIncludingGravity;
+
+      let speed = Math.sqrt(
+        acc.x * acc.x +
+        acc.y * acc.y +
+        acc.z * acc.z
+      );
+
+      updateFace(speed);
+    });
+  }
+}
+</script>
+
+</body>
+</html>
