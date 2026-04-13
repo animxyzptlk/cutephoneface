@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reactive Face</title>
+<title>Reactive Face v2</title>
 
 <style>
 body {
@@ -15,7 +15,7 @@ body {
   height: 100vh;
 }
 
-/* FACE CONTAINER */
+/* FACE */
 .face {
   position: relative;
   width: 300px;
@@ -30,6 +30,7 @@ body {
   background: #111;
   border-radius: 35px;
   top: 120px;
+  transition: all 0.3s ease;
 }
 
 .left-eye { left: 40px; }
@@ -52,37 +53,63 @@ body {
   height: 12px;
   background: #111;
   top: 70px;
+  transition: all 0.3s ease;
 }
 
 .left-brow { left: 30px; transform: rotate(-10deg); }
 .right-brow { right: 30px; transform: rotate(10deg); }
 
-/* NOSE */
-.nose {
+/* MOUTH */
+.mouth {
   position: absolute;
-  width: 40px;
+  width: 60px;
   height: 20px;
   background: #111;
-  bottom: 60px;
-  left: 130px;
-  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  bottom: 40px;
+  left: 120px;
+  border-radius: 20px;
+  transition: all 0.3s ease;
 }
 
-/* ANIMATION STATES */
-.wide .eye {
-  height: 120px;
+/* STATES */
+
+/* SLOW */
+.slow .eye {
+  height: 20px;
 }
 
-.closed .eye {
+.slow .brow {
+  top: 90px;
+}
+
+.slow .mouth {
   height: 10px;
 }
 
-.up .brow {
+/* FAST */
+.fast .eye {
+  height: 120px;
+}
+
+.fast .brow {
   top: 40px;
 }
 
-.down .brow {
-  top: 90px;
+.fast .mouth {
+  height: 40px;
+}
+
+/* FASTER */
+.faster .eye {
+  height: 5px;
+}
+
+.faster .brow {
+  top: 95px;
+}
+
+.faster .mouth {
+  height: 70px;
 }
 
 </style>
@@ -90,14 +117,14 @@ body {
 
 <body>
 
-<div class="face" id="face">
+<div class="face slow" id="face">
   <div class="brow left-brow"></div>
   <div class="brow right-brow"></div>
 
   <div class="eye left-eye"><div class="pupil"></div></div>
   <div class="eye right-eye"><div class="pupil"></div></div>
 
-  <div class="nose"></div>
+  <div class="mouth"></div>
 </div>
 
 <script>
@@ -109,64 +136,72 @@ let gain = audioCtx.createGain();
 oscillator.type = "sine";
 oscillator.connect(gain);
 gain.connect(audioCtx.destination);
-gain.gain.value = 0.05;
 oscillator.start();
 
-function setPitch(speed) {
-  let freq = 200 + speed * 20; // pitch increases with movement
-  oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+// smoothing
+let smoothedSpeed = 0;
+
+function updateAudio(level) {
+  if (level === "slow") {
+    oscillator.frequency.value = 180;
+    gain.gain.value = 0.02;
+  }
+  if (level === "fast") {
+    oscillator.frequency.value = 400;
+    gain.gain.value = 0.05;
+  }
+  if (level === "faster") {
+    oscillator.frequency.value = 800;
+    gain.gain.value = 0.1;
+  }
 }
 
 // FACE CONTROL
 const face = document.getElementById("face");
 
-function updateFace(speed) {
-  face.classList.remove("wide", "closed", "up", "down");
-
-  if (speed < 5) {
-    // Relaxed
-    setPitch(1);
-  } else if (speed < 20) {
-    // Medium
-    face.classList.add("wide", "up");
-    setPitch(5);
-  } else {
-    // Fast
-    face.classList.add("closed", "down");
-    setPitch(10);
-  }
+function setState(state) {
+  face.classList.remove("slow", "fast", "faster");
+  face.classList.add(state);
+  updateAudio(state);
 }
 
-// MOTION DETECTION
-if (typeof DeviceMotionEvent !== "undefined") {
+// MOTION
+function startMotion() {
+  window.addEventListener("devicemotion", (event) => {
+    let acc = event.accelerationIncludingGravity;
 
-  // iOS permission request
-  if (typeof DeviceMotionEvent.requestPermission === "function") {
-    document.body.addEventListener("click", function () {
-      DeviceMotionEvent.requestPermission().then(response => {
-        if (response === "granted") {
-          startMotion();
-        }
-      });
-    });
-  } else {
-    startMotion();
-  }
+    let speed = Math.sqrt(
+      acc.x * acc.x +
+      acc.y * acc.y +
+      acc.z * acc.z
+    );
 
-  function startMotion() {
-    window.addEventListener("devicemotion", function (event) {
-      let acc = event.accelerationIncludingGravity;
+    // smooth values to reduce jitter
+    smoothedSpeed = smoothedSpeed * 0.8 + speed * 0.2;
 
-      let speed = Math.sqrt(
-        acc.x * acc.x +
-        acc.y * acc.y +
-        acc.z * acc.z
-      );
-
-      updateFace(speed);
-    });
-  }
+    // thresholds (tweakable)
+    if (smoothedSpeed < 8) {
+      setState("slow");
+    } else if (smoothedSpeed < 18) {
+      setState("fast");
+    } else {
+      setState("faster");
+    }
+  });
 }
+
+// iOS permission
+if (typeof DeviceMotionEvent.requestPermission === "function") {
+  document.body.addEventListener("click", () => {
+    DeviceMotionEvent.requestPermission().then(res => {
+      if (res === "granted") startMotion();
+    });
+    audioCtx.resume();
+  });
+} else {
+  startMotion();
+}
+
 </script>
 
 </body>
